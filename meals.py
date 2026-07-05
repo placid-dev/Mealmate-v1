@@ -71,7 +71,7 @@ def delete_meal(menu):
 
 #To add or change price of a meal
 def modify_menu(menu):
-    st.subheader("Manage Menu")
+    st.subheader(":rainbow[Manage Menu]")
     st.write("**Current menu items:**")
     for meal, price in menu.items():
         st.write(f"*{meal.title()} - {price} Kshs")
@@ -89,7 +89,6 @@ def modify_menu(menu):
     
 
 def show_recommendation(menu, balance):
-    st.subheader("Budget Recomendations")
     affordable = {meal: cost for meal, cost in menu.items() if cost <= balance}
     if not affordable:
         st.error(" None of the meals fit your budget")
@@ -101,37 +100,42 @@ def show_recommendation(menu, balance):
 #Meal logging
 def log_meal(menu,wallet,food_funds):
         st.subheader("Log a meal")
-        st.write("\nAvailable meals:")
         if not menu:
             st.error("No meals available to log")
             return
-        for meal, price in menu.items():   #INSERT THE RECOMENDATION FUNCTION HERE SO AS THE USER CAN SEE WHAT HE CAN BUY
-
-            st.write(f"{meal.title()} - {price} Kshs")
+           #INSERT THE RECOMENDATION FUNCTION HERE SO AS THE USER CAN SEE ONLY WHAT HE CAN BUY
+        show_recommendation(menu,balance=wallet.get("balance",0))
+            
         with st.form("log_meal_form"):
 
             choice = st.selectbox("Select meal to eat",menu.keys(),format_func=lambda x: x.title())
             submit_log=st.form_submit_button("Log purchase")
             if submit_log:
-                finance.handle_purchase(choice, menu, wallet, food_funds)
-                st.success(f" You bought {choice.title()}. Remaining: {wallet['balance']} Kshs")
+                purchase_successful=finance.handle_purchase(choice, menu, wallet, food_funds)
+                if purchase_successful: #update the session states
+                    st.session_state["wallet"]=wallet
+                    st.session_state["food_funds"]=food_funds
+                    
+                
                 
 
 
 def main_meals():
-    #loading stuff
-    menu=init_menu()
-    my_food_funds=finance.init_food_funds()
-    wallet=storage.load_json("wallet.json", menu)
+    #loading stuff/ Initialization
+    menu=st.session_state["menu"]
+    my_food_funds=st.session_state["food_funds"]
+    wallet=st.session_state["wallet"]
     balance=wallet.get('balance',0)
     
-    #UI      
+    #UI  
+    st.title("WELCOME TO MEALMATE!")    
     tab1,tab2,tab3=st.tabs(["Menu Management","Meal Logging","Recomendations"]) 
     with tab1:
         modify_menu(menu)  
     with tab2:
         log_meal(menu,wallet,my_food_funds)  
     with tab3:
+        st.subheader(":blue[Budget Recommendation]")
         show_recommendation(menu,balance)
 
 if __name__=="__main__":
