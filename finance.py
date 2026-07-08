@@ -44,7 +44,7 @@ def daily_reset_if_needed(wallet, profile):
     today_str = datetime.now().strftime("%Y-%m-%d")
     if wallet.get("last_used") != today_str:
         # save yesterday leftover into savings
-        leftover = wallet.get("balance", 0)  #amount to save
+        leftover = wallet.get("balance", 0)  #amount to save------a small bug here
         wallet["savings"] = wallet.get("savings", 0) + leftover
         # reset daily fields
         wallet["balance"] = profile["daily_budget"]

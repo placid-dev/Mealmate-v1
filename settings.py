@@ -95,7 +95,6 @@ def view_profile():
         st.write(f"Daily Budget: {profile['daily_budget']}")
         st.divider()
 
-#A delete button to ...
         
 if __name__=="__main__":
     profile=init_profile()
