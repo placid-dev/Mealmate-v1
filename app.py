@@ -1,8 +1,9 @@
 import finance
 import meals
 import settings
-from dashboard import *
+import dashboard
 import storage
+import streamlit  as st
 
 # -----------------------
 # Main program
@@ -18,7 +19,7 @@ profile = settings.init_profile()
 #my_food_funds=finance.init_food_funds(profile)
 
 #Pages
-home_page=st.Page("meals.py",title="Home")
+home_page=st.Page("meals.py",title="Meals")
 setting_page=st.Page("settings.py",title="Settings")
 dashboard=st.Page("dashboard.py",title="Dashboard")
 
