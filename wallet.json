@@ -1,12 +1,6 @@
 {
-    "balance": 140,
-    "history": [
-        {
-            "meal": "rice beans",
-            "cost": 50,
-            "time": "Wednesday, Jul 15 at 11:13 AM"
-        }
-    ],
-    "savings": 500,
-    "last_used": "2026-07-15"
+    "balance": 400,
+    "history": [],
+    "savings": 400,
+    "last_used": "2026-07-16"
 }

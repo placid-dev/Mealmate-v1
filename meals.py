@@ -122,7 +122,7 @@ def modify_menu(menu):
 #_____________________Recommendation____________________
 def show_recommendation(menu, balance):
     affordable = {meal: cost for meal, cost in menu.items() if cost <= balance}
-    st.subheader("Meals you can afford")
+    st.subheader("Meals you can afford.")
     if not affordable:
         st.error(" None of the meals fit your wallet balance")
         return
@@ -131,7 +131,7 @@ def show_recommendation(menu, balance):
        with st.container(border=True):
            col1,col2=st.columns([4,1])
            with col1:
-               st.markdown(f"###{meal.title()}")
+               st.markdown(f"**{meal.title()}**")
            with col2:
                st.metric("Price",f"Ksh {cost}")
 
@@ -145,9 +145,9 @@ def log_meal(menu,wallet,food_funds):
         col1,col2=st.columns(2)
 
         with col1:
-            st.metric("wallet Balance",f"{balance}")
+            st.metric("Wallet Balance",f"{balance}")
         with col2:
-            st.metric("Available Meals",len(menu))   
+            st.metric("Available Meals",f":green[{len(menu)}]")   
         st.divider()     
            #INSERT THE RECOMENDATION FUNCTION HERE SO AS THE USER CAN SEE ONLY WHAT HE CAN BUY before selection
         show_recommendation(menu,balance=wallet.get("balance",0))

@@ -9,14 +9,17 @@ from datetime  import datetime
 #==============================================================
 #    LONG PROFILE CREATION FUNTION
 # ============================================================= 
-def user_data_input(key_suffix="default"): #The parameter is to uniquely identify the form
+def user_data_input(key_suffix="default"):
+    st.title("Settings") #The parameter is to uniquely identify the form
+    st.caption("Set up your mealmate profile.")
+    st.divider()
     with st.form(f"Enter_name_and_budget_{key_suffix}",clear_on_submit=True):
     # st.form is to prevent the running of code after every click until all data entered successfully
         name = st.text_input("Enter your name")
         monthly_budget=st.number_input("Enter your monthly budget", min_value=3000)#OR IT CAN BE DERIVED FROM DAILY
         daily_budget = st.number_input("Enter your daily budget",min_value=100) #It can be derived from monthly
         weekly_budget = monthly_budget / 4
-        submitted=st.form_submit_button("Submit")
+        submitted=st.form_submit_button("Save Profile",use_container_width=True)
         if submitted:
             if name.strip() =="":
                 st.error("Field cannot be empty")
@@ -48,19 +51,14 @@ def init_profile():
 #delete funtion
 def delete_profile():
     #delete all files related to user
-    st.markdown("###Warning")
-    st.info("Deleting your profile will permanently clear your account")
+    st.subheader("Danger zone")
+    st.error("Deleting your profile will permanently delete your profile and financial records")
 
 # confirmation check
-    agree=st.checkbox("I understand thet the action cannot be undone")
+    agree=st.checkbox("I understand this action cannot be undone")
     
-    if st.button("Delete Acount",disabled=not agree,type="primary"):
-        # Did not work because the system was  currently reading/modifying the files
-        #target_files=["user_profile.json","food_funds.json","wallet.json","menu.json"] #list of files to be deleted
-        #for file in target_files:
-            #if os.path.exists(file):
-        #        os.remove
-
+    if st.button("Delete Acount",disabled=not agree,type="primary",use_container_width=True):
+       
         #clearing the active memory session
         st.session_state.clear()
 
@@ -90,21 +88,28 @@ def delete_profile():
 def view_profile():
     profile=init_profile() #Gets the profile
     if profile is not None: #Check to make sure the profile actually exists
-        st.write(f"Name: {profile['name']}")
-        st.write(f"Money Allocated this month: {profile['monthly_budget']}")
-        st.write(f"Daily Budget: {profile['daily_budget']}")
-        st.divider()
+        st.subheader("Profile")
+        col1,col2,col3=st.columns(3)
+        with col1:
+            st.metric("**:blue[Name]**",f"{profile['name']}")
+        with col2:
+            st.metric("**Daily Budget**",f"{profile['daily_budget']}")
+        with col3:
+            st.metric("**Monthly Budget**",f"{profile['monthly_budget']}")
+        
 
         
 if __name__=="__main__":
+    st.title("Settings")
+    st.caption("Manage your profile and preferences")
     profile=init_profile()
     if profile is None:
         user_data_input()
     else:    
-      tab1,tab2=st.tabs(["Profile","Na"])
+      tab1,tab2=st.tabs(["Profile","Advanced"])
       with tab1:
         view_profile()
         st.divider()
-        with st.expander("Advanced Options"):
+        with tab2:
             delete_profile()
      
