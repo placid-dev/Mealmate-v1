@@ -1,6 +1,22 @@
 {
-    "balance": 400,
-    "history": [],
+    "balance": 220,
+    "history": [
+        {
+            "meal": "chapoo special",
+            "cost": 80,
+            "time": "Thursday, Jul 16 at 08:15 AM"
+        },
+        {
+            "meal": "chapoo special",
+            "cost": 80,
+            "time": "Thursday, Jul 16 at 08:15 AM"
+        },
+        {
+            "meal": "chai",
+            "cost": 20,
+            "time": "Thursday, Jul 16 at 08:15 AM"
+        }
+    ],
     "savings": 400,
     "last_used": "2026-07-16"
 }

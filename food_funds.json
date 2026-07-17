@@ -1,7 +1,7 @@
 {
     "monthly_budget": 12000,
-    "spent": 0,
+    "spent": 180,
     "weekly_budget": 3000.0,
-    "weekly_spent": 0,
+    "weekly_spent": 180,
     "last_weekly_reset": "2026-07-16"
 }
