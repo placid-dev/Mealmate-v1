@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import storage
+import finance
 from datetime  import datetime
 
 #--------------------PROFILE  ------------------------
@@ -13,7 +14,7 @@ def user_data_input(key_suffix="default"):
     st.title("Settings") #The parameter is to uniquely identify the form
     st.caption("Set up your mealmate profile.")
     st.divider()
-    with st.form(f"Enter_name_and_budget_{key_suffix}",clear_on_submit=True):
+    with st.form(f"Enter_name_and_budget_{key_suffix}",clear_on_submit=False):
     # st.form is to prevent the running of code after every click until all data entered successfully
         name = st.text_input("Enter your name")
         monthly_budget=st.number_input("Enter your monthly budget", min_value=3000)#OR IT CAN BE DERIVED FROM DAILY
@@ -22,7 +23,9 @@ def user_data_input(key_suffix="default"):
         submitted=st.form_submit_button("Save Profile",use_container_width=True)
         if submitted:
             if name.strip() =="":
-                st.error("Field cannot be empty")
+                st.error("Please enter your name")
+            elif daily_budget > monthly_budget:
+                st.error("Your daily budget can't be more than your monthly budget")
             else:
                 profile = {"name": name.title(), "daily_budget": daily_budget,"monthly_budget":monthly_budget}
                 storage.save_json("user_profile.json", profile)           #saving the user profile
@@ -34,7 +37,8 @@ def user_data_input(key_suffix="default"):
             "spent": 0,
             "weekly_budget": weekly_budget,
             "weekly_spent": 0,
-            "last_weekly_reset": datetime.now().strftime("%Y-%m-%d")
+            "last_weekly_reset": finance.today(),
+            "last_monthly_reset": finance.today()
                         }
                 storage.save_json("food_funds.json", data)
                 
@@ -57,7 +61,7 @@ def delete_profile():
 # confirmation check
     agree=st.checkbox("I understand this action cannot be undone")
     
-    if st.button("Delete Acount",disabled=not agree,type="primary",use_container_width=True):
+    if st.button("Delete Account",disabled=not agree,type="primary",use_container_width=True):
        
         #clearing the active memory session
         st.session_state.clear()
@@ -66,7 +70,8 @@ def delete_profile():
         #The bluebrints tell how the files will be overwritten....not just "null". Learnt from a massive mistake
         reset_blueprints={
             "user_profile.json":None,
-            "food_funds.json":{"balance":0,"history":[],"savings":0,"monthly_bugdet":0,"weekly_budget":0,"weekly_spent":0},
+            "food_funds.json":{"monthly_budget":0,"spent":0,"weekly_budget":0,"weekly_spent":0,
+                               "last_weekly_reset":finance.today(),"last_monthly_reset":finance.today()},
             "wallet.json":{},
             "menu.json":{
     "rice beans": 50,
@@ -93,19 +98,19 @@ def view_profile():
         with col1:
             st.metric("**:blue[Name]**",f"{profile['name']}")
         with col2:
-            st.metric("**Daily Budget**",f"{profile['daily_budget']}")
+            st.metric("**Daily Budget**",finance.ksh(profile['daily_budget']))
         with col3:
-            st.metric("**Monthly Budget**",f"{profile['monthly_budget']}")
+            st.metric("**Monthly Budget**",finance.ksh(profile['monthly_budget']))
         
 
         
 if __name__=="__main__":
-    st.title("Settings")
-    st.caption("Manage your profile and preferences")
     profile=init_profile()
     if profile is None:
-        user_data_input()
+        user_data_input()   # draws its own title, so it isn't repeated here
     else:    
+      st.title("Settings")
+      st.caption("Manage your profile and preferences")
       tab1,tab2=st.tabs(["Profile","Advanced"])
       with tab1:
         view_profile()
