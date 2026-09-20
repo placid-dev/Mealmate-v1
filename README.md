@@ -21,6 +21,8 @@ This project is the **Minimum Viable Product (MVP)** for a larger vision of an A
 -  Log meal purchases
 -  Dashboard with spending analytics
 -  Daily, weekly and monthly expense summaries
+-  Spending trend charts and meal history insights
+-  Download the meal menu as CSV or plain text
 -  Persistent local storage using JSON files
 -  Settings page for managing user information
 
