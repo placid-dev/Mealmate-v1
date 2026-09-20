@@ -21,7 +21,7 @@ profile = settings.init_profile()
 #Pages
 home_page=st.Page("meals.py",title="Meals")
 setting_page=st.Page("settings.py",title="Settings")
-dashboard=st.Page("dashboard.py",title="Dashboard")
+dashboard_page=st.Page("dashboard.py",title="Dashboard")  # not "dashboard": that name is the imported module
 
 if profile is None:
     st.info("Please set up your profile in the settings tab to get started.")
@@ -52,9 +52,11 @@ if "menu" not in st.session_state:
 amount_to_save = finance.daily_reset_if_needed(st.session_state["wallet"], profile)
     # WEEKLY check (resets if needed)
 finance.weekly_reset_if_needed(st.session_state["food_funds"])
+    # MONTHLY check (starts a fresh month when the calendar month changes)
+finance.monthly_reset_if_needed(st.session_state["food_funds"])
 
 #standard full navigation menu
-navigation=st.navigation([home_page,dashboard,setting_page])
+navigation=st.navigation([home_page,dashboard_page,setting_page])
 navigation.run()
 
 
