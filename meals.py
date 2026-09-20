@@ -1,9 +1,26 @@
 # -----------------------
 # Recommendation & Menu edit & meal logging
 # -----------------------
+import csv
+import io
+import pandas as pd
 import storage
 import finance
 import streamlit as st
+
+#---------------------------------------------------------------
+#  Feedback after a change
+#  Streamlit draws the page top to bottom, so after a change the menu table / wallet balance
+#  that were already drawn above the form are out of date. Refreshing the page fixes that,
+#  and this keeps the confirmation message alive across the refresh.
+#---------------------------------------------------------------
+def _flash(message, icon=":material/check_circle:"):
+    st.session_state["_flash"] = (message, icon)
+
+def _show_flash():
+    flash = st.session_state.pop("_flash", None)
+    if flash:
+        st.toast(flash[0], icon=flash[1])
 
 #---------------------------------------------------------------
 #-------------------------------Initialization of menu--------------------
@@ -36,6 +53,40 @@ def display_menu(menu):
     ]
     st.table(rows)
 
+#==================Export menu (downloadable copies) ======================
+def menu_to_csv(menu):
+    # CSV opens directly in Excel / Google Sheets
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["Meal", "Price (KSh)"])
+    for meal, price in menu.items():
+        name = meal.title()
+        if name[:1] in ("=", "+", "-", "@"):
+            name = "'" + name   # stops spreadsheets from treating a meal name as a formula
+        writer.writerow([name, price])
+    return buffer.getvalue().encode("utf-8-sig")   # BOM so Excel shows the text correctly
+
+def menu_to_text(menu):
+    # Plain-text menu that is easy to paste into WhatsApp or print
+    width = max(len(meal) for meal in menu) + 4
+    lines = ["MealMate Menu", f"Updated {finance.now().strftime('%d %b %Y')}", ""]
+    for meal, price in menu.items():
+        lines.append(f"{meal.title().ljust(width, '.')} {finance.ksh(price)}")
+    return "\n".join(lines).encode("utf-8")
+
+def export_menu(menu):
+    if not menu:
+        return
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button("Download CSV", data=menu_to_csv(menu),
+                           file_name="mealmate_menu.csv", mime="text/csv",
+                           use_container_width=True)
+    with col2:
+        st.download_button("Download text", data=menu_to_text(menu),
+                           file_name="mealmate_menu.txt", mime="text/plain",
+                           use_container_width=True)
+
 
 def add_meal(menu):
   st.subheader("Add Meal")
@@ -46,14 +97,19 @@ def add_meal(menu):
             #Found a very silly bug here 
             save_changes=st.form_submit_button("Save meal",use_container_width=True)
             if save_changes:
-                if not new_meal or new_price==0:
+                # menu names are stored lowercase (shown with .title()), so "Chai " and "chai" are the same meal
+                name = new_meal.strip().lower()
+                if not name or new_price==0:
                     st.error("Please complete all fields")
                     return
+                if any(existing.strip().lower() == name for existing in menu):
+                    st.error(f"{name.title()} is already on the menu. Use 'Update Price' to change its price.")
+                    return
                 
-                menu[new_meal] = new_price
+                menu[name] = new_price
                 storage.save_json("menu.json",menu)
-                st.success(f" Added {new_meal.title()} successfully!")
-                    #st.rerun()
+                _flash(f"Added {name.title()} to the menu.")
+                st.rerun()
 
 #Updating the price of an existing meal
 def update_existing_meal(menu):
@@ -63,8 +119,8 @@ def update_existing_meal(menu):
          return
     
     with st.form("update_meal_form"):
-        meal_to_update=st.selectbox("Select meal",list(menu.keys()),format_func=lambda x: x.title())
-        new_price=st.number_input(f"New Price(Ksh)",min_value=0,step=5)
+        meal_to_update=st.selectbox("Select meal",list(menu.keys()),format_func=lambda x: f"{x.title()} ({finance.ksh(menu[x])})")
+        new_price=st.number_input(f"New price (Ksh)",min_value=0,step=5)
         save_changes=st.form_submit_button("Update price",use_container_width=True)
         if save_changes:
             if new_price==0:
@@ -74,8 +130,8 @@ def update_existing_meal(menu):
             menu[meal_to_update] = new_price
                 #save
             storage.save_json("menu.json", menu)
-            st.success(f"Updated {meal_to_update.title()} updated successfully!")
-                #st.rerun()
+            _flash(f"Updated {meal_to_update.title()} to {finance.ksh(new_price)}.")
+            st.rerun()
 
 #To delete a meal
 def delete_meal(menu):
@@ -90,7 +146,8 @@ def delete_meal(menu):
             #delete from json
             del menu[meal_to_delete]
             storage.save_json("menu.json",menu)  
-            st.success(f"Successfully removed {meal_to_delete.title()} from the menu!",icon=":material/thumb_up:")
+            _flash(f"Removed {meal_to_delete.title()} from the menu.", ":material/thumb_up:")
+            st.rerun()
 
 
 #To add or change price of a meal
@@ -100,12 +157,13 @@ def modify_menu(menu):
     with left:
         st.markdown("### Current Menu")
         display_menu(menu)
+        export_menu(menu)
     
     #for meal, price in menu.items():
        # st.write(f"*{meal.title()} - {price} Kshs")
     #st.divider()
     with right:
-        st.markdown("###Manage")
+        st.markdown("### Manage")
     #Horizontal radio
         manage_action=st.radio("Choose an action:",
                                ["Add meal", "Update Price","Delete Meal"], 
@@ -131,9 +189,9 @@ def show_recommendation(menu, balance):
        with st.container(border=True):
            col1,col2=st.columns([4,1])
            with col1:
-               st.markdown(f"**{meal.title()}**")
+               st.markdown(f":blue[**{meal.title()}**]")
            with col2:
-               st.metric("Price",f"Ksh {cost}")
+               st.metric("Price",f":yellow[Ksh {cost}]")
 
 #Meal logging
 def log_meal(menu,wallet,food_funds):
@@ -145,7 +203,7 @@ def log_meal(menu,wallet,food_funds):
         col1,col2=st.columns(2)
 
         with col1:
-            st.metric("Wallet Balance",f"{balance}")
+            st.metric("Wallet Balance",finance.ksh(balance))
         with col2:
             st.metric("Available Meals",f":green[{len(menu)}]")   
         st.divider()     
@@ -155,16 +213,41 @@ def log_meal(menu,wallet,food_funds):
         with st.form("log_meal_form"):
 
             choice = st.selectbox("Select meal to eat",menu.keys(),format_func=lambda x: x.title())
-            submit_log=st.form_submit_button("Log Meal")
+            submit_log=st.form_submit_button("Log Meal",icon_position="right")
             if submit_log:
                 purchase_successful=finance.handle_purchase(choice, menu, wallet, food_funds)
                 if purchase_successful: #update the session states
                     st.session_state["wallet"]=wallet
                     st.session_state["food_funds"]=food_funds
+                    _flash(f"You bought {choice.title()} for {finance.ksh(menu[choice])}. Remaining: {finance.ksh(wallet['balance'])}")
+                    st.rerun()  # so the balance and "Meals you can afford" above the form update straight away
                     
-def meal_history():
+def meal_history(wallet):
     st.subheader("Meal History")
-    st.info("Meal history will appear here once you implement purchase history")          
+    stats = finance.get_meal_stats(wallet)
+    if not stats:
+        st.info("No meals logged yet. Log a meal in the Meal Logging tab and your eating habits will show up here.")
+        return
+
+    total_logged = sum(item["count"] for item in stats.values())
+    total_spent = sum(item["spent"] for item in stats.values())
+    col1,col2=st.columns(2)
+    with col1:
+        st.metric("Meals Logged",total_logged)
+    with col2:
+        st.metric("Average Meal Cost",finance.ksh(round(total_spent / total_logged)))
+
+    # most logged first; ties go to the meal that costs less overall
+    ranked = sorted(stats.items(), key=lambda item: (-item[1]["count"], item[1]["spent"]))
+    favourite, favourite_stats = ranked[0]
+    st.caption(f"Most logged: {favourite.title()} ({favourite_stats['count']} times)")
+
+    st.markdown("#### Times each meal was logged")
+    chart_data = pd.DataFrame(
+        {"Meal": [meal.title() for meal, _ in ranked[:8]],
+         "Times logged": [item["count"] for _, item in ranked[:8]]}
+    )
+    st.bar_chart(chart_data, x="Meal", y="Times logged")
                 
 
 
@@ -179,14 +262,17 @@ def main_meals():
     st.title("Meals")   
     st.caption("Manage your meals, log purchases and stay within budget") 
     st.divider()
-    tab1,tab2,tab3=st.tabs(["Meal Logging","Menu Management","Recomendations"]) 
+    tab1,tab2,tab3=st.tabs(["Meal Logging","Menu Management","Meal History"]) 
     with tab1:
         log_meal(menu,wallet,my_food_funds)
         
     with tab2:
           modify_menu(menu)  
     with tab3:
-        meal_history()
+        meal_history(wallet)
+
+    # shown after the tabs (not before) so the tab layout doesn't shift and jump back to the first tab
+    _show_flash()
 
 if __name__=="__main__":
     main_meals()
