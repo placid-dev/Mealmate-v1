@@ -11,6 +11,7 @@ import streamlit  as st
 #Page set up
 st.set_page_config(
         page_title="Mealmate",
+        page_icon="icon.jpeg",
         layout="centered",
         
     )
@@ -21,7 +22,7 @@ profile = settings.init_profile()
 #Pages
 home_page=st.Page("meals.py",title="Meals")
 setting_page=st.Page("settings.py",title="Settings")
-dashboard_page=st.Page("dashboard.py",title="Dashboard")  # not "dashboard": that name is the imported module
+dashboard_page=st.Page("dashboard.py",title="Dashboard")  
 
 if profile is None:
     st.info("Please set up your profile in the settings tab to get started.")
