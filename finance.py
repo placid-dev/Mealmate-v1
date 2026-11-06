@@ -1,4 +1,4 @@
-import storage
+import db_operations
 from datetime import datetime, timedelta, timezone
 import streamlit as st
 
@@ -27,38 +27,45 @@ def ksh(amount):
 
 #setting up the wallet 
 def init_wallet(profile):
-    default = {"balance": profile["daily_budget"], "history": [], "savings": 0}
-    wallet = storage.load_json("wallet.json", default)
-    # ensure keys exist
-    wallet.setdefault("balance", profile["daily_budget"])
-    wallet.setdefault("history", [])
-    wallet.setdefault("history_archive", [])  # past days' purchases (feeds the analytics charts)
-    wallet.setdefault("savings", 0)
-    wallet.setdefault("last_used", None)
+    # users row: 4 = current_daily_balance, 5 = savings_balance, 8 = last_daily_reset
+    user = db_operations.get_user(profile["user_id"])
+    last_used = user[8]
+    wallet = {"balance": user[4], "history": [], "history_archive": [], "savings": user[5], "last_used": last_used}
+    # purchase_history rows: (purchase_id, user_id, meal_name, cost, purchase_time) - oldest first.
+    # The wallet's current day goes in "history", earlier days in "history_archive" (feeds the analytics charts)
+    for row in sorted(db_operations.get_purchase_history(profile["user_id"]), key=lambda row: (row[4], row[0])):
+        entry = {
+            "meal": row[2],
+            "cost": row[3],
+            "time": datetime.strptime(row[4], "%Y-%m-%d %H:%M:%S").strftime("%A, %b %d at %I:%M %p"),
+            "date": row[4][:10]
+        }
+        if last_used and entry["date"] >= last_used:
+            wallet["history"].append(entry)
+        else:
+            wallet["history_archive"].append(entry)
     return wallet
 
 #setting up the money allocated
 def init_food_funds(profile):
-    default = None
-    data = storage.load_json("food_funds.json", default)#loading
-    if profile is not None: #if there is a profile existing
-        monthly_funds =profile.get("monthly_budget",0)
-        
-    else:#New structure
-        monthly_funds=0
-    is_new = data is None
-    if is_new:
-        data = {}
-    # Existing values are never overwritten, but any missing key is filled in
-    # (older or reset files don't always have every field).
-    data.setdefault("monthly_budget", monthly_funds)
-    data.setdefault("spent", 0)
-    data.setdefault("weekly_budget", data["monthly_budget"] / 4)
-    data.setdefault("weekly_spent", 0)
-    data.setdefault("last_weekly_reset", today())
-    data.setdefault("last_monthly_reset", today())
-    if is_new:
-        storage.save_json("food_funds.json", data)
+    # users row: 3 = monthly_budget, 6 = last_weekly_reset, 7 = last_mothly_reset
+    user = db_operations.get_user(profile["user_id"])
+    last_weekly_reset = user[6] or today()
+    last_monthly_reset = user[7] or today()
+    data = {
+        "monthly_budget": user[3],
+        "spent": 0,
+        "weekly_budget": user[3] / 4,
+        "weekly_spent": 0,
+        "last_weekly_reset": last_weekly_reset,
+        "last_monthly_reset": last_monthly_reset
+    }
+    # what has been spent this week / month is everything bought since the last reset
+    for row in db_operations.get_purchase_history(profile["user_id"]):
+        if row[4][:10] >= last_monthly_reset:
+            data["spent"] += row[3]
+        if row[4][:10] >= last_weekly_reset:
+            data["weekly_spent"] += row[3]
     return data
 
 # -----------------------
@@ -71,6 +78,7 @@ def daily_reset_if_needed(wallet, profile):
         # save yesterday leftover into savings
         # (a brand-new wallet has no "yesterday": its starting balance was never left over, so nothing is saved)
         leftover = wallet.get("balance", 0) if last_used else 0
+        day_spent = sum(entry["cost"] for entry in wallet.get("history", []))  # what the finished day cost
         wallet["savings"] = wallet.get("savings", 0) + leftover
         # keep the finished day's purchases for the analytics before the daily list is cleared
         archive = wallet.setdefault("history_archive", [])
@@ -82,7 +90,7 @@ def daily_reset_if_needed(wallet, profile):
         wallet["balance"] = profile["daily_budget"]
         wallet["history"] = []  # today's list only - past days live in history_archive
         wallet["last_used"] = today_str
-        storage.save_json("wallet.json",wallet) # very crucial to ensure the update is saved on the wallet
+        db_operations.start_new_day(profile["user_id"], today_str, profile["daily_budget"], last_used, day_spent, leftover) # very crucial to ensure the update is saved on the wallet
         #print(" New day detected — daily balance reset and leftover saved.")
         return leftover
     return 0
@@ -100,7 +108,7 @@ def weekly_reset_if_needed(food_funds):
         food_funds["weekly_spent"] = 0
         food_funds["weekly_budget"] = food_funds["monthly_budget"] / 4
         food_funds["last_weekly_reset"] = today()
-        storage.save_json("food_funds.json", food_funds)
+        db_operations.update_weekly_reset(st.session_state["user_id"], food_funds["last_weekly_reset"])
         st.success("Weekly food budget has been reset.")
         return True
     return False
@@ -112,7 +120,7 @@ def monthly_reset_if_needed(food_funds):
     if last_reset[:7] != today_str[:7]:   # compares "YYYY-MM"
         food_funds["spent"] = 0
         food_funds["last_monthly_reset"] = today_str
-        storage.save_json("food_funds.json", food_funds)
+        db_operations.update_monthly_reset(st.session_state["user_id"], today_str)
         st.info("A new month has started - your monthly food budget has been reset.")
         return True
     return False
@@ -123,6 +131,8 @@ def monthly_reset_if_needed(food_funds):
 def handle_purchase(choice, menu, wallet, food_funds):
     cost = menu[choice]
     if cost <= wallet["balance"]:
+        # records the purchase and deducts the cost from the user's balance in the database
+        db_operations.log_purchase(st.session_state["user_id"], choice, cost, now().strftime("%Y-%m-%d %H:%M:%S"))
         wallet["balance"] -= cost
         entry = {
             "meal": choice,
@@ -134,8 +144,6 @@ def handle_purchase(choice, menu, wallet, food_funds):
         # update food funds
         food_funds["spent"] = food_funds.get("spent", 0) + cost
         food_funds["weekly_spent"] = food_funds.get("weekly_spent", 0) + cost
-        storage.save_json("food_funds.json", food_funds)
-        storage.save_json("wallet.json", wallet)
         # (the "You bought ..." confirmation is shown by meals.py, which refreshes the page after a purchase)
         return True
     else:

@@ -15,14 +15,20 @@ def create_users_table():
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             daily_budget INTEGER  DEFAULT 300,
-            montly_budget INTEGER GENERATED ALWAYS AS (daily_budget*30),
+            monthly_budget INTEGER GENERATED ALWAYS AS (daily_budget*30),
             current_daily_balance REAL NOT NULL,
             savings_balance REAL NOT NULL,
             last_weekly_reset DATE DEFAULT CURRENT_DATE,
-            last_mothly_reset DATE DEFAULT CURRENT_DATE
+            last_mothly_reset DATE DEFAULT CURRENT_DATE,
+            last_daily_reset DATE
             );
             """
             cursor.execute(create_users_sql)
+
+            #Databases created before last_daily_reset existed don't have the column yet
+            columns=[row[1] for row in cursor.execute("PRAGMA table_info(users)")]
+            if "last_daily_reset" not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_daily_reset DATE")
             
 
 #2. MENU ITEMS TABLE

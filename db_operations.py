@@ -37,6 +37,19 @@ def get_user(user_id):
             user=cursor.fetchone() # returns one matching row
             return user # a tuple
 
+#Find user by usefrname
+def get_user_by_username(username):
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        cursor=conn.cursor()
+        cursor.execute("""
+        --sql
+        SELECT *
+        FROM users
+        WHERE username=?
+        ;
+        """,(username,))  
+        return cursor.fetchone()          
+
 #Updating a users budget 
 
 
@@ -84,9 +97,34 @@ def get_meal(item_id):
         """,(item_id,))   
         return cursor.fetchone() 
 
+#Upate menu items
+def update_menu_items(item_id,new_cost): #I doubt using id instead of name, anyway..
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        with conn:
+            cursor=conn.cursor()
+            cursor.execute("""
+            --sql
+            UPDATE menu_items
+            SET cost=? WHERE item_id=?
+            ;
+            """,(new_cost,item_id))
+            return cursor.rowcount  #tell the no of rows affected
+
+def delete_menu_item(item_id):
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        with conn:
+            cursor=conn.cursor()
+            cursor.execute("""
+            --sql
+            DELETE FROM menu_items 
+            WHERE item_id=?
+            ;
+            """,(item_id,))    
+            return cursor.rowcount      
+
 
 #______Recording a purchase_________
-def log_purchase(user_id,meal_name,cost):
+def log_purchase(user_id,meal_name,cost,purchase_time=None): #purchase_time: 'YYYY-MM-DD HH:MM:SS', defaults to the database clock
      #verify meal exixts on the menu
      #----------snip----------------
      with closing(sqlite3.connect(DB_NAME)) as conn:
@@ -105,10 +143,10 @@ def log_purchase(user_id,meal_name,cost):
             #Record the purchase in purchase history table
             cursor.execute("""
             --sql
-            INSERT INTO purchase_history (user_id,meal_name,cost)
-            VALUES(?,?,?)
+            INSERT INTO purchase_history (user_id,meal_name,cost,purchase_time)
+            VALUES(?,?,?,COALESCE(?,CURRENT_TIMESTAMP))
             ;
-            """,(user_id,meal_name,cost))
+            """,(user_id,meal_name,cost,purchase_time))
 
             #deduct the cost from the balance
             cursor.execute("""
@@ -164,8 +202,54 @@ def get_daily_summaries(user_id):
         """,(user_id,))
         return cursor.fetchall()
 
+#New day: save the finished day's summary, bank its leftover into savings and reset the daily balance
+def start_new_day(user_id,today,daily_budget,finished_date=None,amount_spent=0,leftover=0):
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        with conn:
+            cursor=conn.cursor()
+            if finished_date: #a brand-new user has no finished day to summarise
+                cursor.execute("""
+                --sql
+                INSERT INTO daily_summaries(user_id,log_date,allocated_budget,amount_spent,leftover_saved)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(user_id,log_date) DO UPDATE SET
+                    allocated_budget=excluded.allocated_budget,
+                    amount_spent=excluded.amount_spent,
+                    leftover_saved=excluded.leftover_saved
+                ;
+                """,(user_id,finished_date,daily_budget,amount_spent,leftover))
+            cursor.execute("""
+            --sql
+            UPDATE users
+            SET savings_balance=savings_balance+?,
+                current_daily_balance=?,
+                last_daily_reset=?
+            WHERE user_id=?
+            ;
+            """,(leftover,daily_budget,today,user_id))
+
+def update_weekly_reset(user_id,reset_date):
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        with conn:
+            conn.execute("UPDATE users SET last_weekly_reset=? WHERE user_id=?;",(reset_date,user_id))
+
+def update_monthly_reset(user_id,reset_date):
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        with conn:
+            conn.execute("UPDATE users SET last_mothly_reset=? WHERE user_id=?;",(reset_date,user_id))
+
+#Deleting a user also deletes their purchases and summaries (ON DELETE CASCADE)
+def delete_user(user_id):
+    with closing(sqlite3.connect(DB_NAME)) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        with conn:
+            cursor=conn.cursor()
+            cursor.execute("DELETE FROM users WHERE user_id=?;",(user_id,))
+            return cursor.rowcount
+
 if __name__=="__main__":
-    #log_purchase(user_id=6,meal_name="pilau",cost=50)
+    log_purchase(user_id=5,meal_name="fried rice",cost=150)
     #print(get_purchase_history(user_id=1))
     #print(get_daily_summaries(user_id=3 ))
     create_user("george",380)   

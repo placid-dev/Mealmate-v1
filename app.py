@@ -2,7 +2,7 @@ import finance
 import meals
 import settings
 import dashboard
-import storage
+import database
 import streamlit  as st
 
 # -----------------------
@@ -16,7 +16,10 @@ st.set_page_config(
         
     )
 #======INITIALIZATION========
-profile = settings.init_profile()
+database.initialize_database() #creates the tables on a fresh install, does nothing if they already exist
+#st.session_state["profile"]=settings.init_profile()
+profile = st.session_state.get("profile") #Get profile from the session state
+
 #my_food_funds=finance.init_food_funds(profile)
 
 #Pages
@@ -59,12 +62,6 @@ finance.monthly_reset_if_needed(st.session_state["food_funds"])
 #standard full navigation menu
 navigation=st.navigation([home_page,dashboard_page,setting_page])
 navigation.run()
-
-
-#=================Save ENGINE=========================
-storage.save_json("wallet.json", st.session_state["wallet"])
-storage.save_json("food_funds.json", st.session_state["food_funds"])
-storage.save_json("menu.json", st.session_state["menu"])
 
    
 
