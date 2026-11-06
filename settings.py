@@ -42,7 +42,7 @@ def user_data_input(key_suffix="default"):
                         st.stop()
                     st.session_state["user_id"]=user_id
                     st.session_state["profile"]={"user_id":user_id,
-                                                 "username":name.strip().title(),
+                                                 "username":name.strip(),
                                                  "daily_budget":daily_budget,
                                                  "monthly_budget":monthly_budget}
 
