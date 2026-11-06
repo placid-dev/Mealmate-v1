@@ -4,9 +4,9 @@
 import csv
 import io
 import pandas as pd
-import storage
 import finance
 import streamlit as st
+import db_operations
 
 #---------------------------------------------------------------
 #  Feedback after a change
@@ -26,7 +26,9 @@ def _show_flash():
 #-------------------------------Initialization of menu--------------------
 #-------------------------------------------------------------------------------
 def init_menu():
-    default_menu = {
+    items=db_operations.get_menu_items()
+    if not items:
+        default_menu = {
         "rice beans": 50,
         "ugali beans": 40,
         "chapoo special": 80,
@@ -34,8 +36,15 @@ def init_menu():
         "chafua": 60,
         "fried rice": 100,
         "pilau": 120
-    }
-    return storage.load_json("menu.json", default_menu)
+        }
+        for name, cost in default_menu.items():
+            db_operations.add_menu_items(name,cost)
+        items=db_operations.get_menu_items()
+
+    return {
+        item_name:int(cost)
+        for item_id, item_name,cost in items
+    }   #Convert tuples to a dictionary
 
 # adding new meal(s) into the existing menu
 
@@ -105,9 +114,12 @@ def add_meal(menu):
                 if any(existing.strip().lower() == name for existing in menu):
                     st.error(f"{name.title()} is already on the menu. Use 'Update Price' to change its price.")
                     return
-                
-                menu[name] = new_price
-                storage.save_json("menu.json",menu)
+
+                item_id=db_operations.add_menu_items(name,int(new_price)) #save in the database
+                if item_id is None:
+                    st.error("Could not add the meal.It may already exist.")
+                    return
+                menu[name] = int(new_price)
                 _flash(f"Added {name.title()} to the menu.")
                 st.rerun()
 
@@ -126,13 +138,26 @@ def update_existing_meal(menu):
             if new_price==0:
                 st.error("Price cannot be zero")  
                 return  
-            
-            menu[meal_to_update] = new_price
-                #save
-            storage.save_json("menu.json", menu)
-            _flash(f"Updated {meal_to_update.title()} to {finance.ksh(new_price)}.")
-            st.rerun()
+             #Find the database id for the selected meal
+            item_id=next(
+                    (
+                        row[0] for row in db_operations.get_menu_items()
+                        if row[1]==meal_to_update
+                    ),
+                    None
+                )
+            if item_id is None:
+                st.error("Meal not found in database.")
+                return
 
+            updated=db_operations.update_menu_items(item_id,int(new_price))
+            if updated:
+                menu[meal_to_update] = new_price
+                _flash(f"Updated {meal_to_update.title()} to {finance.ksh(new_price)}.")
+                st.rerun()
+            else:
+                st.error("The price could not be updated.")
+                
 #To delete a meal
 def delete_meal(menu):
     st.subheader("Delete Meal")
@@ -143,12 +168,24 @@ def delete_meal(menu):
         meal_to_delete=st.selectbox("Select a meal to delete",list(menu.keys()),format_func=lambda x: x.title())               
         confirm_delete=st.form_submit_button("Delete meal",type='primary',use_container_width=True)
         if confirm_delete:
-            #delete from json
-            del menu[meal_to_delete]
-            storage.save_json("menu.json",menu)  
-            _flash(f"Removed {meal_to_delete.title()} from the menu.", ":material/thumb_up:")
-            st.rerun()
-
+        #Find the database id for the selected meal
+            item_id=next(
+                (
+                    row[0] for row in db_operations.get_menu_items()
+                    if row[1]==meal_to_delete
+                ),
+                None
+            )
+            if item_id is None:
+                st.error("Meal not found in database.")
+                return
+            deleted=db_operations.delete_menu_item(item_id)
+            if deleted:
+                del menu[meal_to_delete]
+                _flash(f"Removed {meal_to_delete.title()} from the menu.", ":material/thumb_up:")
+                st.rerun()
+            else:
+                st.error("Meal could not be deleted")
 
 #To add or change price of a meal
 def modify_menu(menu):
@@ -253,7 +290,8 @@ def meal_history(wallet):
 
 def main_meals():
     #loading stuff/ Initialization
-    menu=st.session_state["menu"]
+    #st.session_state["menu"]=init_menu()
+    menu=st.session_state.get("menu")
     my_food_funds=st.session_state["food_funds"]
     wallet=st.session_state["wallet"]
     balance=wallet.get('balance',0)
